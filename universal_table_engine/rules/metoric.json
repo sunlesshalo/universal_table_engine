@@ -1,0 +1,20 @@
+{
+  "name": "metoric",
+  "match": {
+    "filenames": ["metoric"],
+    "hints": ["metoric"],
+    "columns": ["valoare", "tva", "metoda"]
+  },
+  "dataset_type": "financial",
+  "column_aliases": {
+    "valoare totala": "amount",
+    "valoare": "amount",
+    "data tranzactie": "date",
+    "tva": "vat",
+    "metoda plata": "payment_method",
+    "client": "customer_name"
+  },
+  "primary_key": "invoice_number",
+  "bigquery_dataset": "finance",
+  "bigquery_table": "metoric_transactions"
+}

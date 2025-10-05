@@ -1,0 +1,5 @@
+# SmartBill export
+# generated 2024-03-01
+Serie;Numar factura;Data factura;Client;Email;Valoare
+SB;123;15.03.2024;Test SRL;contact@test-srl.ro;1.200,00
+SB;124;16.03.2024;Next SRL;next@example.com;950,00

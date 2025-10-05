@@ -1,0 +1,9 @@
+{
+  "name": "default",
+  "match": {
+    "filenames": [],
+    "columns": []
+  },
+  "column_aliases": {},
+  "dataset_type": "unknown"
+}

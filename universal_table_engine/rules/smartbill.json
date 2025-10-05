@@ -1,0 +1,18 @@
+{
+  "name": "smartbill",
+  "match": {
+    "filenames": ["smartbill"],
+    "hints": ["smartbill"],
+    "columns": ["serie", "numar", "valoare"]
+  },
+  "dataset_type": "financial",
+  "column_aliases": {
+    "numar factura": "invoice_number",
+    "data factura": "date",
+    "valoare": "amount",
+    "client": "customer_name",
+    "email": "customer_email"
+  },
+  "primary_key": "invoice_number",
+  "sheets_mode": "append"
+}
