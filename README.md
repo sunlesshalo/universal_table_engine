@@ -9,6 +9,7 @@ Universal Table Engine ingests CSV/XLS(X) files, normalizes schemas, and emits a
 - Rules-based + LLM semantic aliasing and dataset classification
 - JSON, Google Sheets, and BigQuery adapters with feature flags
 - Structlog JSON logging, PII detection/masking, FastAPI interface
+- Admin UI upload flow allows overriding header row detection manually when needed
 - Authenticated webhook intake with HMAC/API key verification, idempotency cache, and on-disk receipts
 - React/Tailwind admin UI for uploads, webhook wizard, deliveries monitor, presets, and settings (served under `/admin`)
 
@@ -56,6 +57,11 @@ Receipts and deliveries endpoints:
 - `POST /admin/deliveries/{intake_id}/replay`
 - `GET /admin/presets` / `POST /admin/presets` / `DELETE /admin/presets/{client}/{preset}`
 - `GET /admin/settings`
+
+Upload tweaks:
+
+- In the Upload screen you can set `Header row` to a zero-based index to skip auto-detection when you know exactly where the table starts.
+- Presets can store the same override (and other defaults) for reuse across uploads/webhooks.
 
 ## Configuration
 Copy `.env.example` to `.env` and adjust values. Key variables:

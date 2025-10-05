@@ -18,6 +18,7 @@ interface PresetFormState {
   dayfirst: boolean;
   decimal_style: "auto" | "comma" | "dot";
   enable_llm: boolean;
+  header_row: string;
 }
 
 const emptyState: PresetFormState = {
@@ -27,7 +28,8 @@ const emptyState: PresetFormState = {
   source_hint: "",
   dayfirst: true,
   decimal_style: "auto",
-  enable_llm: false
+  enable_llm: false,
+  header_row: "",
 };
 
 export const PresetsPage: React.FC = () => {
@@ -46,19 +48,23 @@ export const PresetsPage: React.FC = () => {
 
   const saveMutation = useMutation({
     mutationFn: async (payload: PresetFormState) => {
+      const defaults: Record<string, unknown> = {
+        adapter: payload.adapter,
+        source_hint: payload.source_hint,
+        dayfirst: payload.dayfirst,
+        decimal_style: payload.decimal_style,
+        enable_llm: payload.enable_llm,
+      };
+      if (payload.header_row) {
+        defaults.header_row = Number(payload.header_row);
+      }
       const response = await fetch(`${API_BASE_URL}/admin/presets`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           client_id: payload.client_id,
           preset_id: payload.preset_id,
-          defaults: {
-            adapter: payload.adapter,
-            source_hint: payload.source_hint,
-            dayfirst: payload.dayfirst,
-            decimal_style: payload.decimal_style,
-            enable_llm: payload.enable_llm
-          }
+          defaults,
         })
       });
       if (!response.ok) {
@@ -170,6 +176,17 @@ export const PresetsPage: React.FC = () => {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="preset-header-row">Header row</Label>
+              <Input
+                id="preset-header-row"
+                type="number"
+                min={0}
+                placeholder="Auto"
+                value={form.header_row}
+                onChange={(event) => setForm((state) => ({ ...state, header_row: event.target.value }))}
+              />
+            </div>
             <div className="flex items-center justify-between rounded-lg border border-border px-4 py-3">
               <div>
                 <Label className="text-sm">Enable LLM</Label>
@@ -199,7 +216,9 @@ export const PresetsPage: React.FC = () => {
                   {preset.client_id} / {preset.preset_id}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Adapter: {String(preset.defaults.adapter ?? "json")} · Source hint: {String(preset.defaults.source_hint ?? "—")}
+                  Adapter: {String(preset.defaults.adapter ?? "json")} · Source hint: {String(preset.defaults.source_hint ?? "—")} · Header row: {
+                    preset.defaults.header_row ?? "auto"
+                  }
                 </p>
               </div>
               <div className="flex gap-2">
@@ -214,7 +233,11 @@ export const PresetsPage: React.FC = () => {
                       source_hint: String(preset.defaults.source_hint ?? ""),
                       dayfirst: Boolean(preset.defaults.dayfirst ?? true),
                       decimal_style: (preset.defaults.decimal_style as PresetFormState["decimal_style"]) ?? "auto",
-                      enable_llm: Boolean(preset.defaults.enable_llm ?? false)
+                      enable_llm: Boolean(preset.defaults.enable_llm ?? false),
+                      header_row:
+                        preset.defaults.header_row !== undefined && preset.defaults.header_row !== null
+                          ? String(preset.defaults.header_row)
+                          : "",
                     })
                   }
                 >

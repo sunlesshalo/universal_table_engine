@@ -12,6 +12,7 @@ export interface ParseOptions {
   dayfirst: boolean;
   decimal_style: "auto" | "comma" | "dot";
   dry_run: boolean;
+  header_row: string;
 }
 
 interface ParseOptionsFormProps {
@@ -26,7 +27,8 @@ export const defaultParseOptions: ParseOptions = {
   enable_llm: false,
   dayfirst: true,
   decimal_style: "auto",
-  dry_run: false
+  dry_run: false,
+  header_row: "",
 };
 
 export const ParseOptionsForm: React.FC<ParseOptionsFormProps> = ({ value, onChange }) => {
@@ -66,6 +68,18 @@ export const ParseOptionsForm: React.FC<ParseOptionsFormProps> = ({ value, onCha
           placeholder="Optional sheet name"
           value={value.sheet_name}
           onChange={(event) => update({ sheet_name: event.target.value })}
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="header_row">Header row</Label>
+        <Input
+          id="header_row"
+          type="number"
+          min={0}
+          placeholder="Auto detect"
+          value={value.header_row}
+          onChange={(event) => update({ header_row: event.target.value })}
         />
       </div>
 

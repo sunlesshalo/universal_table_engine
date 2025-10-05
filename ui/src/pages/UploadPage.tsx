@@ -63,6 +63,7 @@ export const UploadPage: React.FC = () => {
       if (options.source_hint) params.set("source_hint", options.source_hint);
       if (options.sheet_name) params.set("sheet_name", options.sheet_name);
       if (options.enable_llm) params.set("enable_llm", String(options.enable_llm));
+      if (options.header_row) params.set("header_row", options.header_row);
       params.set("dayfirst", String(options.dayfirst));
       params.set("decimal_style", options.decimal_style);
       if (options.dry_run) params.set("dry_run", "true");
@@ -110,14 +111,14 @@ export const UploadPage: React.FC = () => {
     if (!file) return;
     const params = new URLSearchParams();
     if (clientId) params.set("client_id", clientId);
-      if (presetId) params.set("preset_id", presetId);
+    if (presetId) params.set("preset_id", presetId);
     if (options.source_hint) params.set("source_hint", options.source_hint);
     if (options.sheet_name) params.set("sheet_name", options.sheet_name);
     if (options.enable_llm) params.set("enable_llm", String(options.enable_llm));
+    if (options.header_row) params.set("header_row", options.header_row);
     params.set("dayfirst", String(options.dayfirst));
     params.set("decimal_style", options.decimal_style);
     if (options.dry_run) params.set("dry_run", "true");
-    if (presetId) params.set("preset_id", presetId);
     params.set("adapter", options.adapter);
     const curl = [
       "curl",

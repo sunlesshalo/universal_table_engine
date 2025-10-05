@@ -101,6 +101,7 @@ async def parse_file(
     adapter: Optional[str] = Query(default=None, pattern="^(json|sheets|bigquery|none)$"),
     sheet_name: Optional[str] = Query(default=None),
     enable_llm: Optional[bool] = Query(default=None),
+    header_row: Optional[int] = Query(default=None, ge=0),
     preset_id: Optional[str] = Query(default=None),
     dayfirst: Optional[bool] = Query(default=None),
     decimal_style: Optional[str] = Query(default=None, pattern="^(auto|comma|dot)$"),
@@ -125,6 +126,7 @@ async def parse_file(
                 "sheet_name": sheet_name,
                 "enable_llm": enable_llm,
                 "adapter": adapter,
+                "header_row": header_row,
                 "dayfirst": dayfirst,
                 "decimal_style": decimal_style,
                 "dry_run": dry_run,
@@ -514,24 +516,6 @@ async def replay_delivery(
     return receipt
 
 
-if UI_DIST_PATH.exists():
-    assets_dir = UI_DIST_PATH / "assets"
-    if assets_dir.exists():
-        app.mount("/admin/assets", StaticFiles(directory=assets_dir), name="admin-assets")
-        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
-    index_file = UI_DIST_PATH / "index.html"
-
-    @app.get("/admin", include_in_schema=False)
-    async def serve_admin_index():
-        if not index_file.exists():
-            raise not_found("admin_ui_missing", "admin UI build not found")
-        return FileResponse(index_file)
-
-    @app.get("/admin/{spa_path:path}", include_in_schema=False)
-    async def serve_admin_spa(spa_path: str):
-        if not index_file.exists():
-            raise not_found("admin_ui_missing", "admin UI build not found")
-        return FileResponse(index_file)
 
 
 @app.get("/admin/presets")
@@ -634,12 +618,35 @@ async def _run_parse_from_bytes(
         request_notes.append(f"sheet_selected={sample.sheet_choice.name}")
 
     effective_enable_llm = options.get("enable_llm", enable_llm)
-    header_client = build_header_client(config, effective_enable_llm)
-    header_result = header_detect.detect_header(
-        sample.sample_rows,
-        llm_client=header_client,
-        max_rows=config.header_search_rows,
-    )
+    header_row_option = options.get("header_row")
+    header_result: header_detect.HeaderDetectionResult
+    if header_row_option not in (None, ""):
+        try:
+            header_override = int(header_row_option)
+        except (TypeError, ValueError) as exc:
+            raise bad_request("invalid_header_row", "header_row must be an integer >= 0") from exc
+        if header_override < 0:
+            raise bad_request("invalid_header_row", "header_row must be an integer >= 0")
+        if header_override >= len(sample.sample_rows):
+            raise bad_request(
+                "header_row_out_of_range",
+                "header_row outside sampled range; try uploading without override",
+            )
+        override_columns = [str(value).strip() for value in sample.sample_rows[header_override]]
+        header_result = header_detect.HeaderDetectionResult(
+            header_row=header_override,
+            columns=override_columns,
+            confidence=1.0,
+            notes=[f"manual_header_row={header_override}"],
+            used_llm=False,
+        )
+    else:
+        header_client = build_header_client(config, effective_enable_llm)
+        header_result = header_detect.detect_header(
+            sample.sample_rows,
+            llm_client=header_client,
+            max_rows=config.header_search_rows,
+        )
 
     effective_source_hint = options.get("source_hint") or source_hint
     rules, rule_notes = rules_loader.load_matching_rule(
@@ -1062,6 +1069,7 @@ def _extract_intake_options_from_mapping(payload: Dict[str, Any]) -> Dict[str, A
         "preset_id",
         "dayfirst",
         "decimal_style",
+        "header_row",
     }
     options: Dict[str, Any] = {}
     for key in recognised_keys:
@@ -1089,6 +1097,26 @@ def _resolve_sync_flag(
             raise bad_request("invalid_sync_param", "sync must be true or false")
         return parsed
     return not config.webhook_async_default
+
+
+if UI_DIST_PATH.exists():
+    assets_dir = UI_DIST_PATH / "assets"
+    if assets_dir.exists():
+        app.mount("/admin/assets", StaticFiles(directory=assets_dir), name="admin-assets")
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+    index_file = UI_DIST_PATH / "index.html"
+
+    @app.get("/admin", include_in_schema=False)
+    async def serve_admin_index():
+        if not index_file.exists():
+            raise not_found("admin_ui_missing", "admin UI build not found")
+        return FileResponse(index_file)
+
+    @app.get("/admin/{spa_path:path}", include_in_schema=False)
+    async def serve_admin_spa(spa_path: str):
+        if not index_file.exists():
+            raise not_found("admin_ui_missing", "admin UI build not found")
+        return FileResponse(index_file)
 
 
 __all__ = ["app"]
