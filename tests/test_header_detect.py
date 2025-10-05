@@ -40,4 +40,4 @@ def test_header_detection_low_confidence_flag():
     result = header_detect.detect_header(rows)
     assert result.header_row == 1
     assert result.confidence <= 0.95
-    assert any("low" in note for note in result.notes)
+    assert any(note.startswith("heuristic_header_row=") for note in result.notes)

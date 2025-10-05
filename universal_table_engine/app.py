@@ -61,6 +61,7 @@ async def parse_file(
     config: AppSettings = Depends(get_app_settings),
 ) -> ParseResponse:
     request_notes: List[str] = []
+    started = time.perf_counter()
     try:
         raw_bytes = await file.read()
         size_bytes = len(raw_bytes)
@@ -134,14 +135,14 @@ async def parse_file(
             sheet=sample.sheet_choice.name if sample.sheet_choice else None,
         )
 
-        schema = SchemaMetadata(**normalization.schema)  # type: ignore[arg-type]
+        table_schema = SchemaMetadata(**normalization.schema)  # type: ignore[arg-type]
         pii_meta = PIIMetadata(**normalization.pii_flags)
 
         response_payload: Dict[str, object] = {
             "status": status,
             "confidence": round(overall_confidence, 3),
             "source": source,
-            "schema": schema,
+            "table_schema": table_schema,
             "data": records,
             "notes": notes,
             "pii_detected": pii_meta,
@@ -181,6 +182,10 @@ async def parse_file(
 
         response_payload["adapter_results"] = adapter_results or None
 
+        duration = time.perf_counter() - started
+        row_count = int(normalization.dataframe.shape[0])
+        column_count = int(normalization.dataframe.shape[1])
+
         logger.info(
             "parse_success",
             filename=file.filename,
@@ -188,6 +193,9 @@ async def parse_file(
             status=status,
             confidence=overall_confidence,
             adapters=[result.get("adapter") for result in adapter_results],
+            rows=row_count,
+            cols=column_count,
+            duration_ms=round(duration * 1000, 2),
         )
 
         return ParseResponse(**response_payload)
@@ -200,13 +208,13 @@ async def parse_file(
             detected_format="csv",
             sheet=None,
         )
-        schema = SchemaMetadata(columns=[], types={}, aliases={}, dataset_type="unknown")
+        table_schema = SchemaMetadata(columns=[], types={}, aliases={}, dataset_type="unknown")
         pii_meta = PIIMetadata(email=False, phone=False)
         return ParseResponse(
             status="parsed_with_low_confidence",
             confidence=0.2,
             source=source,
-            schema=schema,
+            table_schema=table_schema,
             data=[],
             notes=fallback_notes,
             pii_detected=pii_meta,
@@ -230,6 +238,10 @@ def _serialize_records(df: pd.DataFrame) -> List[Dict[str, object]]:
                 clean[key] = None
             elif pd.isna(value):  # type: ignore[arg-type]
                 clean[key] = None
+            elif isinstance(value, pd.Timestamp):
+                clean[key] = value.to_pydatetime().replace(microsecond=0).isoformat()
+            elif isinstance(value, datetime):
+                clean[key] = value.replace(microsecond=0).isoformat()
             else:
                 clean[key] = value
         records.append(clean)
@@ -239,12 +251,15 @@ def _serialize_records(df: pd.DataFrame) -> List[Dict[str, object]]:
 def _payload_to_dict(payload: Dict[str, object]) -> Dict[str, object]:
     result: Dict[str, object] = {}
     for key, value in payload.items():
+        target_key = "schema" if key == "table_schema" else key
         if hasattr(value, "model_dump"):
-            result[key] = value.model_dump()
+            result[target_key] = value.model_dump(by_alias=True)
         elif isinstance(value, list):
-            result[key] = [item.model_dump() if hasattr(item, "model_dump") else item for item in value]
+            result[target_key] = [
+                item.model_dump(by_alias=True) if hasattr(item, "model_dump") else item for item in value
+            ]
         else:
-            result[key] = value
+            result[target_key] = value
     return result
 
 

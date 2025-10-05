@@ -21,6 +21,7 @@ def test_parse_excel_multisheet(client, data_dir):
         )
     assert response.status_code == 200
     payload = response.json()
+    assert payload["status"] in {"ok", "parsed_with_low_confidence"}
     assert payload["schema"]["dataset_type"] in {"financial", "orders", "unknown"}
     assert payload["data"]
 

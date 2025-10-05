@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
+from pydantic.config import ConfigDict
 
 
 class SourceMetadata(BaseModel):
@@ -26,10 +27,12 @@ class PIIMetadata(BaseModel):
 
 
 class ParseResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     status: Literal["ok", "parsed_with_low_confidence", "needs_rulefile"]
     confidence: float = Field(ge=0.0, le=1.0)
     source: SourceMetadata
-    schema: SchemaMetadata
+    table_schema: SchemaMetadata = Field(alias="schema")
     data: List[Dict[str, object]]
     notes: List[str]
     pii_detected: PIIMetadata

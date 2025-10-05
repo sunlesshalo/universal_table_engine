@@ -28,6 +28,18 @@ def load_matching_rule(
         notes.append("rules_directory_missing")
         return None, notes
 
+    normalized_hint = source_hint.lower() if source_hint else None
+
+    if normalized_hint:
+        hinted_path = rules_dir / f"{normalized_hint}.json"
+        if hinted_path.exists():
+            try:
+                payload = json.loads(hinted_path.read_text())
+                notes.append(f"rule_applied={hinted_path.stem}")
+                return payload, notes
+            except json.JSONDecodeError:
+                notes.append(f"rule_invalid_json:{hinted_path.name}")
+
     candidates: list[LoadedRule] = []
     for path in rules_dir.glob("*.json"):
         try:
@@ -45,10 +57,7 @@ def load_matching_rule(
         return None, notes
 
     selected = max(candidates, key=lambda rule: rule.score)
-    if selected.name == "default" and selected.score < 0.5:
-        notes.append("default_rule_applied")
-    else:
-        notes.append(f"rule_selected:{selected.name}")
+    notes.append(f"rule_applied={selected.name}")
     return selected.payload, notes
 
 
@@ -67,7 +76,7 @@ def _score_rule(payload: dict, filename: str, columns: Iterable[str], source_hin
         hints = [value.lower() for value in match.get("hints", [])]
         for token in hints:
             if token and token in lowered_hint:
-                score += 0.6
+                score += 1.0
 
     column_keywords = [value.lower() for value in match.get("columns", [])]
     lowered_columns = [value.lower() for value in columns]

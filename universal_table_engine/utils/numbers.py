@@ -3,23 +3,23 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-import pandas as pd  # <-- szükséges a Series-es konverterhez
+import pandas as pd
 
-# Devizajelek és gyakori 3–4 betűs kódok; kis/nagybetű független
+# Currency symbols and common codes; case-insensitive
 _CURRENCY_RE = re.compile(r"(?:[€$£¥₽₴₺₦]|\b(?:lei|ron|usd|eur|gbp)\b)", re.IGNORECASE)
-# Ezres elválasztók: szóköz, aposztróf, backtick, középpont, aláhúzás számok között
+# Thousands separators allowed between digits
 _THOUSANDS_RE = re.compile(r"(?<=\d)[\s'`·_](?=\d)")
-# Minden, ami nem szám, pont, vessző, előjel
+# Characters to strip (everything except digits, signs, comma, dot)
 _NON_NUMERIC_RE = re.compile(r"[^0-9.,+-]")
 
 
 def normalize_numeric_string(value: str) -> str:
     cleaned = value.strip()
-    cleaned = cleaned.replace("\u00A0", " ")  # nem törhető szóköz → sima szóköz
-    cleaned = _CURRENCY_RE.sub("", cleaned)   # pénznem jel/kód ki
-    cleaned = cleaned.replace("%", "")        # % jel ki (percentet később kezeljük)
-    cleaned = _THOUSANDS_RE.sub("", cleaned)  # ezres elválasztók ki
-    cleaned = cleaned.replace(" ", "")        # maradék szóközök ki
+    cleaned = cleaned.replace("\u00A0", " ")  # normalize non-breaking space
+    cleaned = _CURRENCY_RE.sub("", cleaned)
+    cleaned = cleaned.replace("%", "")
+    cleaned = _THOUSANDS_RE.sub("", cleaned)
+    cleaned = cleaned.replace(" ", "")
     return cleaned
 
 
@@ -30,30 +30,25 @@ def parse_number(value: str) -> Optional[float]:
     if not text:
         return None
 
-    # százalék megjegyzés — a végén osztjuk 100-zal
     pct = text.endswith("%")
 
     normalized = normalize_numeric_string(text)
     if not normalized:
         return None
 
-    # tizedesjel meghatározása
     if normalized.count(",") and normalized.count("."):
-        # ahol később fordul elő a kettő közül, az lesz a tizedes
         decimal_char = "," if normalized.rfind(",") > normalized.rfind(".") else "."
     elif normalized.count(","):
         decimal_char = ","
     else:
         decimal_char = "."
 
-    # egységesítés pont tizedesre
     if decimal_char == ",":
-        normalized = normalized.replace(".", "")   # pont: ezres
-        normalized = normalized.replace(",", ".")  # vessző: tizedes
+        normalized = normalized.replace(".", "")
+        normalized = normalized.replace(",", ".")
     else:
-        normalized = normalized.replace(",", "")   # vessző: ezres
+        normalized = normalized.replace(",", "")
 
-    # nem numerikus karakterek dobása
     normalized = _NON_NUMERIC_RE.sub("", normalized)
     if normalized in {"", ".", "+", "-", "-."}:
         return None
@@ -74,13 +69,8 @@ def is_numeric_series(values: list[str], success_threshold: float = 0.6) -> bool
 
 
 def coerce_numeric_series(series: pd.Series) -> pd.Series:
-    """
-    Pandas Series → float (NaN, ha nem értelmezhető).
-    Kezeli: pénznem jelek/kódok, ezres elválasztók, tizedes vessző/pont, százalék.
-    """
-    # mindent str-re alakítunk és a parse_number-rel értelmezzük
+    """Convert text-like numeric series to floats with NaN for invalid entries."""
     parsed = series.astype(str).map(parse_number)
-    # to_numeric konzisztens NaN kezeléshez
     return pd.to_numeric(parsed, errors="coerce")
 
 
@@ -88,6 +78,5 @@ __all__ = [
     "normalize_numeric_string",
     "parse_number",
     "is_numeric_series",
-    "coerce_numeric_series",   # <-- exportáljuk is
+    "coerce_numeric_series",
 ]
-

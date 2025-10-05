@@ -23,6 +23,7 @@ def test_normalize_numbers_and_dates(data_dir):
     assert "dates_normalized" in result.notes
     assert "decimal_comma_normalized" in result.notes
     assert result.schema["types"]["valoare_totala"] == "number"
+    assert result.schema["types"]["data_tranzactie"] == "date"
 
 
 def test_boolean_mapping(data_dir):

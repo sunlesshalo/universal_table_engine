@@ -10,11 +10,21 @@ Universal Table Engine ingests CSV/XLS(X) files, normalizes schemas, and emits a
 - JSON, Google Sheets, and BigQuery adapters with feature flags
 - Structlog JSON logging, PII detection/masking, FastAPI interface
 
-## Quick Start
+## Quick Runbook
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
 make install
 make run
 ```
+Verify the service:
+
+```bash
+curl http://127.0.0.1:8000/health
+curl -F "file=@tests/data/messy_header_semicolon.csv" \
+  "http://127.0.0.1:8000/parse?client_id=demo&adapter=json&enable_llm=false"
+```
+
 Visit `http://localhost:8000/docs` for interactive API docs.
 
 ## Configuration
@@ -46,6 +56,14 @@ make docker-run
 ## Example Request
 ```bash
 curl -F "file=@tests/data/messy_header_semicolon.csv" "http://localhost:8000/parse?client_id=demo&adapter=json&enable_llm=false"
+```
+
+Zapier webhook sample (replace the URL with your Zap inbound hook):
+
+```bash
+curl -X POST "https://hooks.zapier.com/hooks/catch/<zap_id>/<trigger_id>/" \
+  -H "Content-Type: application/json" \
+  -d @out/demo/messy_header_semicolon.json
 ```
 
 Adapter outputs are written under `./out/<client_id>/<filename>.json`.
