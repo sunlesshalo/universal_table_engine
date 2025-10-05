@@ -50,6 +50,16 @@ class AppSettings(BaseSettings):
     csv_sample_rows: int = Field(default=50)
     header_search_rows: int = Field(default=50)
 
+    # Webhook intake
+    webhook_enable: bool = Field(default=True)
+    webhook_max_upload_size_mb: int = Field(default=100)
+    webhook_clock_skew_seconds: int = Field(default=300)
+    webhook_require_auth: bool = Field(default=True)
+    webhook_api_keys: dict[str, str] = Field(default_factory=dict)
+    webhook_hmac_secrets: dict[str, str] = Field(default_factory=dict)
+    webhook_allowed_ips: list[str] = Field(default_factory=list)
+    webhook_async_default: bool = Field(default=False)
+
     # Google Sheets
     sheets_spreadsheet_id: Optional[str] = Field(default=None)
     sheets_service_account_file: Optional[Path] = Field(default=None)
@@ -64,6 +74,7 @@ class AppSettings(BaseSettings):
     # Misc
     mask_pii: bool = Field(default=False)
     rules_dir: Path = Field(default=Path(__file__).resolve().parent / "rules")
+    presets_dir: Path = Field(default=Path("presets"))
     metrics_namespace: str = Field(default="ute")
 
 
@@ -73,10 +84,11 @@ def get_settings() -> AppSettings:
     # Normalize/ensure paths
     s.output_dir = s.output_dir.resolve()
     s.rules_dir = s.rules_dir.resolve()
+    s.presets_dir = s.presets_dir.resolve()
     if s.persist_logs:
         s.output_dir.mkdir(parents=True, exist_ok=True)
+    s.presets_dir.mkdir(parents=True, exist_ok=True)
     return s
 
 
 __all__ = ["AppSettings", "get_settings"]
-

@@ -49,6 +49,47 @@ class RulesResponse(BaseModel):
     rules: List[str]
 
 
+class ErrorResponse(BaseModel):
+    error_code: str
+    message: str
+    hint: Optional[str] = None
+
+
+class WebhookReceipt(BaseModel):
+    intake_id: str
+    client_id: Optional[str]
+    preset_id: Optional[str] = None
+    idempotency_key: str
+    status: Literal["ok", "parsed_with_low_confidence", "queued", "failed", "needs_rulefile"]
+    processing: bool
+    duplicate: bool = False
+    sync: bool = True
+    received_at: datetime
+    filename: Optional[str] = None
+    notes: List[str] = []
+    parse: Optional[ParseResponse] = None
+    artifacts: Dict[str, str] = Field(default_factory=dict)
+    results_url: Optional[str] = None
+
+
+class DeliverySummary(BaseModel):
+    intake_id: str
+    client_id: Optional[str]
+    preset_id: Optional[str] = None
+    status: str
+    confidence: Optional[float] = None
+    received_at: datetime
+    filename: Optional[str] = None
+    rule_applied: Optional[str] = None
+    notes: List[str] = []
+
+
+class PresetPayload(BaseModel):
+    client_id: str
+    preset_id: str
+    defaults: Dict[str, object]
+
+
 __all__ = [
     "ParseResponse",
     "SourceMetadata",
@@ -56,4 +97,8 @@ __all__ = [
     "PIIMetadata",
     "HealthResponse",
     "RulesResponse",
+    "ErrorResponse",
+    "WebhookReceipt",
+    "DeliverySummary",
+    "PresetPayload",
 ]

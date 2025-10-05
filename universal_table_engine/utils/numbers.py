@@ -23,7 +23,7 @@ def normalize_numeric_string(value: str) -> str:
     return cleaned
 
 
-def parse_number(value: str) -> Optional[float]:
+def parse_number(value: str, decimal_hint: Optional[str] = None) -> Optional[float]:
     if value is None:
         return None
     text = value.strip()
@@ -36,7 +36,11 @@ def parse_number(value: str) -> Optional[float]:
     if not normalized:
         return None
 
-    if normalized.count(",") and normalized.count("."):
+    if decimal_hint == "comma":
+        decimal_char = ","
+    elif decimal_hint == "dot":
+        decimal_char = "."
+    elif normalized.count(",") and normalized.count("."):
         decimal_char = "," if normalized.rfind(",") > normalized.rfind(".") else "."
     elif normalized.count(","):
         decimal_char = ","
@@ -68,9 +72,9 @@ def is_numeric_series(values: list[str], success_threshold: float = 0.6) -> bool
     return success / len(values) >= success_threshold
 
 
-def coerce_numeric_series(series: pd.Series) -> pd.Series:
+def coerce_numeric_series(series: pd.Series, decimal_hint: Optional[str] = None) -> pd.Series:
     """Convert text-like numeric series to floats with NaN for invalid entries."""
-    parsed = series.astype(str).map(parse_number)
+    parsed = series.astype(str).map(lambda value: parse_number(value, decimal_hint=decimal_hint))
     return pd.to_numeric(parsed, errors="coerce")
 
 

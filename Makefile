@@ -1,6 +1,6 @@
 PYTHON ?= python3
 
-.PHONY: install run lint format test docker-build docker-run
+.PHONY: install run lint format test docker-build docker-run ui-install ui-build
 
 install:
 	$(PYTHON) -m pip install --upgrade pip
@@ -25,3 +25,9 @@ docker-build:
 
 docker-run:
 	docker run --rm -p 8000:8000 --env-file .env.example -v $$(pwd)/out:/app/out universal-table-engine
+
+ui-install:
+	cd ui && npm install
+
+ui-build:
+	cd ui && npm run build

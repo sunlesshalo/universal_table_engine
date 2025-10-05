@@ -45,3 +45,12 @@ def test_phone_detection_and_masking():
     assert "@example.com" in masked
     assert "234" not in masked
     assert "67" in masked
+
+
+def test_decimal_hint_comma():
+    series_dot = pd.Series(["1.234", "5.678"])
+    dot_result = numbers.coerce_numeric_series(series_dot, decimal_hint="dot")
+    assert dot_result.iloc[0] == 1.234
+    series_comma = pd.Series(["1.234,50", "2.345,60"])
+    comma_result = numbers.coerce_numeric_series(series_comma, decimal_hint="comma")
+    assert comma_result.iloc[0] == 1234.50

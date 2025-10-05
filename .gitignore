@@ -14,3 +14,5 @@ build/
 dist/
 out/
 *.log
+ui/node_modules/
+ui/dist/

@@ -9,6 +9,8 @@ Universal Table Engine ingests CSV/XLS(X) files, normalizes schemas, and emits a
 - Rules-based + LLM semantic aliasing and dataset classification
 - JSON, Google Sheets, and BigQuery adapters with feature flags
 - Structlog JSON logging, PII detection/masking, FastAPI interface
+- Authenticated webhook intake with HMAC/API key verification, idempotency cache, and on-disk receipts
+- React/Tailwind admin UI for uploads, webhook wizard, deliveries monitor, presets, and settings (served under `/admin`)
 
 ## Quick Runbook
 ```bash
@@ -26,6 +28,34 @@ curl -F "file=@tests/data/messy_header_semicolon.csv" \
 ```
 
 Visit `http://localhost:8000/docs` for interactive API docs.
+
+### Admin UI & Webhook Wizard
+
+```
+cd ui
+npm install
+npm run dev        # local dev server at http://localhost:5173
+npm run build      # generates ui/dist consumed by FastAPI /admin
+```
+
+Once `ui/dist` exists the FastAPI app serves the SPA at `/admin` with static assets under `/admin/assets`.
+
+Webhook intake endpoints:
+
+- `POST /webhook/v1/intake`
+- `POST /webhook/v1/intake/{client}`
+- `POST /webhook/v1/intake/{client}/{preset}`
+
+Supported modes: multipart (file field), JSON `file_url`, JSON `file_b64`. Auth headers include `Authorization: Bearer <api-key>` and/or `X-UTE-Signature` + `X-UTE-Timestamp` for HMAC. Idempotent requests return stored receipts when the same idempotency key is provided.
+
+Receipts and deliveries endpoints:
+
+- `GET /admin/deliveries`
+- `GET /admin/deliveries/{intake_id}`
+- `GET /admin/deliveries/{intake_id}/artifacts.zip`
+- `POST /admin/deliveries/{intake_id}/replay`
+- `GET /admin/presets` / `POST /admin/presets` / `DELETE /admin/presets/{client}/{preset}`
+- `GET /admin/settings`
 
 ## Configuration
 Copy `.env.example` to `.env` and adjust values. Key variables:

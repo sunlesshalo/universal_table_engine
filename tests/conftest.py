@@ -13,6 +13,7 @@ from universal_table_engine.app import app, settings
 def configure_settings(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
     output_dir = tmp_path_factory.mktemp("out")
     settings.output_dir = output_dir
+    settings.presets_dir = tmp_path_factory.mktemp("presets")
     settings.enable_llm = False
     settings.enable_json_adapter = True
     settings.enable_sheets_adapter = False

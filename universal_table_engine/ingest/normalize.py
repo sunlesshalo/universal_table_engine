@@ -34,6 +34,8 @@ def normalize_table(
     settings: AppSettings,
     rules: Optional[dict] = None,
     llm_aliases: Optional[Dict[str, str]] = None,
+    dayfirst: Optional[bool] = None,
+    decimal_style: Optional[str] = None,
 ) -> NormalizationResult:
     original_columns = list(raw_columns)
     df = _read_dataframe(sample, header_row)
@@ -43,7 +45,12 @@ def normalize_table(
     cleaned_columns, column_notes = _clean_columns(list(df.columns))
     df.columns = cleaned_columns
 
-    conversions, type_labels, type_confidences, type_notes = _convert_columns(df, cleaned_columns)
+    conversions, type_labels, type_confidences, type_notes = _convert_columns(
+        df,
+        cleaned_columns,
+        dayfirst=dayfirst,
+        decimal_style=decimal_style,
+    )
     df = conversions
 
     pii_flags = pii.detect_pii_frame(df)
@@ -117,7 +124,11 @@ def _clean_columns(columns: List[str]) -> tuple[List[str], List[str]]:
 
 
 def _convert_columns(
-    df: pd.DataFrame, columns: List[str]
+    df: pd.DataFrame,
+    columns: List[str],
+    *,
+    dayfirst: Optional[bool],
+    decimal_style: Optional[str],
 ) -> tuple[pd.DataFrame, Dict[str, str], Dict[str, float], List[str]]:
     output = pd.DataFrame(index=df.index)
     type_labels: Dict[str, str] = {}
@@ -126,7 +137,12 @@ def _convert_columns(
 
     for column in columns:
         series = df[column]
-        converted, type_label, confidence, column_notes = _convert_series(series, column)
+        converted, type_label, confidence, column_notes = _convert_series(
+            series,
+            column,
+            dayfirst=dayfirst,
+            decimal_style=decimal_style,
+        )
         output[column] = converted
         type_labels[column] = type_label
         confidences[column] = confidence
@@ -135,7 +151,13 @@ def _convert_columns(
     return output, type_labels, confidences, list(dict.fromkeys(notes))
 
 
-def _convert_series(series: pd.Series, column_name: str) -> tuple[pd.Series, str, float, List[str]]:
+def _convert_series(
+    series: pd.Series,
+    column_name: str,
+    *,
+    dayfirst: Optional[bool],
+    decimal_style: Optional[str],
+) -> tuple[pd.Series, str, float, List[str]]:
     text_series = series.astype(str)
     stripped = text_series.str.strip()
     non_empty_mask = stripped.ne("")
@@ -154,9 +176,13 @@ def _convert_series(series: pd.Series, column_name: str) -> tuple[pd.Series, str
     lower_name = column_name.lower()
     is_date_hint = any(token in lower_name for token in DATE_HINTS)
     is_number_hint = any(token in lower_name for token in NUMBER_HINTS)
+    effective_dayfirst = dayfirst if dayfirst is not None else True
+    decimal_hint = decimal_style if decimal_style in {"auto", "comma", "dot"} else None
+    if decimal_hint == "auto":
+        decimal_hint = None
 
     if is_date_hint:
-        coerced_dates = dates.coerce_date_series(text_series, dayfirst=True)
+        coerced_dates = dates.coerce_date_series(text_series, dayfirst=effective_dayfirst)
         success = int(coerced_dates.notna().sum())
         if success:
             confidence = success / non_empty_count if non_empty_count else 0.0
@@ -164,7 +190,7 @@ def _convert_series(series: pd.Series, column_name: str) -> tuple[pd.Series, str
             return coerced_dates, "date", max(confidence, 0.7), notes
 
     if is_number_hint:
-        coerced_numbers = numbers.coerce_numeric_series(text_series)
+        coerced_numbers = numbers.coerce_numeric_series(text_series, decimal_hint=decimal_hint)
         success = int(coerced_numbers.notna().sum())
         if success:
             confidence = success / non_empty_count if non_empty_count else 0.0
@@ -174,7 +200,7 @@ def _convert_series(series: pd.Series, column_name: str) -> tuple[pd.Series, str
                 notes.append("numbers_normalized")
             return coerced_numbers, "number", max(confidence, 0.7), notes
 
-    numeric_candidate = numbers.coerce_numeric_series(text_series)
+    numeric_candidate = numbers.coerce_numeric_series(text_series, decimal_hint=decimal_hint)
     numeric_success = int(numeric_candidate.notna().sum())
     numeric_conf = numeric_success / non_empty_count if non_empty_count else 0.0
     if numeric_conf >= 0.6:
@@ -184,7 +210,7 @@ def _convert_series(series: pd.Series, column_name: str) -> tuple[pd.Series, str
             notes.append("numbers_normalized")
         return numeric_candidate, "number", numeric_conf, notes
 
-    date_candidate = dates.coerce_date_series(text_series, dayfirst=True)
+    date_candidate = dates.coerce_date_series(text_series, dayfirst=effective_dayfirst)
     date_success = int(date_candidate.notna().sum())
     date_conf = date_success / non_empty_count if non_empty_count else 0.0
     if date_conf >= 0.5 or (is_date_hint and date_success):
