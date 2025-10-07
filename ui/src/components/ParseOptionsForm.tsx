@@ -13,6 +13,8 @@ export interface ParseOptions {
   decimal_style: "auto" | "comma" | "dot";
   dry_run: boolean;
   header_row: string;
+  use_ndjson_file: boolean;
+  load_mode: "stream" | "file";
 }
 
 interface ParseOptionsFormProps {
@@ -29,6 +31,8 @@ export const defaultParseOptions: ParseOptions = {
   decimal_style: "auto",
   dry_run: false,
   header_row: "",
+  use_ndjson_file: false,
+  load_mode: "stream",
 };
 
 export const ParseOptionsForm: React.FC<ParseOptionsFormProps> = ({ value, onChange }) => {
@@ -38,7 +42,16 @@ export const ParseOptionsForm: React.FC<ParseOptionsFormProps> = ({ value, onCha
     <div className="grid gap-4 md:grid-cols-2">
       <div className="flex flex-col gap-2">
         <Label>Adapter</Label>
-        <Select value={value.adapter} onValueChange={(adapter) => update({ adapter })}>
+        <Select
+          value={value.adapter}
+          onValueChange={(adapter) =>
+            update({
+              adapter,
+              load_mode: adapter === "bigquery" ? value.load_mode : "stream",
+              use_ndjson_file: adapter === "bigquery" ? value.use_ndjson_file : false,
+            })
+          }
+        >
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
@@ -120,6 +133,42 @@ export const ParseOptionsForm: React.FC<ParseOptionsFormProps> = ({ value, onCha
         </div>
         <Switch checked={value.dry_run} onCheckedChange={(state) => update({ dry_run: state })} />
       </div>
+
+      {value.adapter === "bigquery" ? (
+        <>
+          <div className="flex flex-col gap-2">
+            <Label>BigQuery load mode</Label>
+            <Select
+              value={value.load_mode}
+              onValueChange={(mode) =>
+                update({
+                  load_mode: mode as ParseOptions["load_mode"],
+                  use_ndjson_file: mode === "file" ? true : value.use_ndjson_file,
+                })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="stream">Stream (DataFrame)</SelectItem>
+                <SelectItem value="file">File load (NDJSON)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-white px-4 py-3">
+            <div>
+              <Label className="text-sm">Use NDJSON sidecar</Label>
+              <p className="text-xs text-muted-foreground">Persist NDJSON and load via file when available</p>
+            </div>
+            <Switch
+              checked={value.use_ndjson_file}
+              onCheckedChange={(state) => update({ use_ndjson_file: state })}
+            />
+          </div>
+        </>
+      ) : null}
     </div>
   );
 };

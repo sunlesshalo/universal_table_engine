@@ -12,7 +12,7 @@ import { NotesList } from "@/components/NotesList";
 import { ArtifactsList } from "@/components/ArtifactsList";
 import { useToast } from "@/components/hooks/useToast";
 import { API_BASE_URL } from "@/lib/utils";
-import { DeliverySummary, ParseResponse, PresetDefinition } from "@/types/api";
+import { AdapterResult, DeliverySummary, ParseResponse, PresetDefinition } from "@/types/api";
 
 interface ParseResultState {
   response: ParseResponse;
@@ -20,7 +20,7 @@ interface ParseResultState {
   cols: number;
   durationMs?: number;
   ruleApplied?: string | null;
-  artifacts: Record<string, string>;
+  adapterResults: AdapterResult[];
 }
 
 export const UploadPage: React.FC = () => {
@@ -68,6 +68,8 @@ export const UploadPage: React.FC = () => {
       params.set("decimal_style", options.decimal_style);
       if (options.dry_run) params.set("dry_run", "true");
       params.set("adapter", adapterOverride ?? options.adapter);
+      if (options.load_mode) params.set("load_mode", options.load_mode);
+      if (options.use_ndjson_file) params.set("use_ndjson_file", String(options.use_ndjson_file));
       const response = await fetch(`${API_BASE_URL}/parse?${params.toString()}`, {
         method: "POST",
         body: formData
@@ -84,7 +86,7 @@ export const UploadPage: React.FC = () => {
         rows: data.data.length,
         cols: data.schema.columns.length,
         ruleApplied: data.notes.find((note) => note.startsWith("rule_applied="))?.split("=", 1)[1] ?? null,
-        artifacts: data.adapter_results?.[0] ? (data.adapter_results[0] as Record<string, string>) : {}
+        adapterResults: data.adapter_results ?? []
       });
       push({ title: "Parse complete", description: `Status: ${data.status}`, variant: "success" });
     },
@@ -120,6 +122,8 @@ export const UploadPage: React.FC = () => {
     params.set("decimal_style", options.decimal_style);
     if (options.dry_run) params.set("dry_run", "true");
     params.set("adapter", options.adapter);
+    if (options.load_mode) params.set("load_mode", options.load_mode);
+    if (options.use_ndjson_file) params.set("use_ndjson_file", String(options.use_ndjson_file));
     const curl = [
       "curl",
       "-X",
@@ -191,7 +195,7 @@ export const UploadPage: React.FC = () => {
               ruleApplied={parseResult.ruleApplied}
             />
             <NotesList notes={parseResult.response.notes} />
-            <ArtifactsList artifacts={parseResult.artifacts} />
+            <ArtifactsList adapterResults={parseResult.adapterResults} />
           </div>
           <SchemaTable schema={parseResult.response.schema} />
         </div>

@@ -30,6 +30,7 @@ from .ingest import file_reader, header_detect, normalize, rules_loader
 from .ingest.llm_helper import build_alias_client, build_header_client
 from .logging_conf import configure_logging
 from .models import (
+    AdapterResult,
     DeliverySummary,
     ErrorResponse,
     HealthResponse,
@@ -43,6 +44,7 @@ from .models import (
 )
 from .presets import Preset, list_presets, load_preset, merge_with_preset, preset_path
 from .settings import AppSettings, get_settings
+from .utils.bigquery import build_bigquery_field_map, sanitize_field_name
 from .webhook_store import WebhookStore
 
 logger = structlog.get_logger(__name__)
@@ -66,7 +68,7 @@ _start_time = time.monotonic()
 @dataclass(slots=True)
 class ParseExecutionResult:
     response: ParseResponse
-    adapter_results: List[Dict[str, Any]]
+    adapter_results: List[AdapterResult]
     notes: List[str]
     rule_applied: Optional[str]
     detected_format: str
@@ -105,6 +107,8 @@ async def parse_file(
     preset_id: Optional[str] = Query(default=None),
     dayfirst: Optional[bool] = Query(default=None),
     decimal_style: Optional[str] = Query(default=None, pattern="^(auto|comma|dot)$"),
+    use_ndjson_file: Optional[bool] = Query(default=None),
+    load_mode: Optional[str] = Query(default=None, pattern="^(stream|file)$"),
     dry_run: Optional[bool] = Query(default=None),
     config: AppSettings = Depends(get_app_settings),
 ) -> ParseResponse:
@@ -129,6 +133,8 @@ async def parse_file(
                 "header_row": header_row,
                 "dayfirst": dayfirst,
                 "decimal_style": decimal_style,
+                "use_ndjson_file": use_ndjson_file,
+                "load_mode": load_mode,
                 "dry_run": dry_run,
             },
         )
@@ -151,7 +157,7 @@ async def parse_file(
             client_id=client_id,
             status=result.response.status,
             confidence=result.response.confidence,
-            adapters=[item.get("adapter") for item in result.adapter_results],
+            adapters=[item.adapter for item in result.adapter_results],
             rows=result.rows,
             cols=result.cols,
             duration_ms=result.duration_ms,
@@ -303,9 +309,14 @@ async def webhook_intake(
             options=parse_options,
         )
 
-        artifacts.update({
-            "adapter_results": json.dumps(result.adapter_results, ensure_ascii=False),
-        })
+        artifacts.update(
+            {
+                "adapter_results": json.dumps(
+                    [item.model_dump(mode="json") for item in result.adapter_results],
+                    ensure_ascii=False,
+                ),
+            }
+        )
 
         receipt = WebhookReceipt(
             intake_id=intake_id,
@@ -486,7 +497,10 @@ async def replay_delivery(
     )
 
     replay_notes = [f"replay_of={intake_id}"] + result.notes
-    artifacts["adapter_results"] = json.dumps(result.adapter_results, ensure_ascii=False)
+    artifacts["adapter_results"] = json.dumps(
+        [item.model_dump(mode="json") for item in result.adapter_results],
+        ensure_ascii=False,
+    )
 
     receipt = WebhookReceipt(
         intake_id=new_intake_id,
@@ -696,7 +710,6 @@ async def _run_parse_from_bytes(
         status = "needs_rulefile"
 
     notes = request_notes + header_result.notes + normalization.notes
-    notes = list(dict.fromkeys(notes))
 
     records = _serialize_records(normalization.dataframe)
 
@@ -709,6 +722,7 @@ async def _run_parse_from_bytes(
 
     table_schema = SchemaMetadata(**normalization.schema)  # type: ignore[arg-type]
     pii_meta = PIIMetadata(**normalization.pii_flags)
+    bq_field_map = build_bigquery_field_map(table_schema.columns)
 
     response_payload: Dict[str, Any] = {
         "status": status,
@@ -720,44 +734,80 @@ async def _run_parse_from_bytes(
         "pii_detected": pii_meta,
     }
 
-    adapter_results: List[Dict[str, Any]] = []
-    effective_adapter = options.get("adapter") or adapter or config.default_adapter
-    effective_adapter = effective_adapter.lower()
+    adapter_results: List[AdapterResult] = []
+    adapter_notes: List[str] = []
+    effective_adapter = (options.get("adapter") or adapter or config.default_adapter).lower()
     dry_run = bool(options.get("dry_run"))
 
-    if not dry_run:
-        if effective_adapter == "json" and config.enable_json_adapter:
-            adapter_results.append(
-                json_adapter.export_json(
-                    _payload_to_dict(response_payload),
-                    settings=config,
-                    client_id=client_id,
-                    filename=filename,
-                )
-            )
-        elif effective_adapter == "sheets":
-            adapter_results.append(
-                sheets_adapter.export_to_sheets(
-                    normalization.dataframe,
-                    settings=config,
-                    worksheet_name=effective_sheet_name,
-                    client_id=client_id,
-                    primary_key=(rules or {}).get("primary_key") if rules else None,
-                    mode=(rules or {}).get("sheets_mode") if rules else None,
-                )
-            )
-        elif effective_adapter == "bigquery":
-            adapter_results.append(
-                bigquery_adapter.export_to_bigquery(
-                    normalization.dataframe,
-                    settings=config,
-                    dataset=(rules or {}).get("bigquery_dataset") if rules else None,
-                    table=(rules or {}).get("bigquery_table") if rules else None,
-                    partition_field=_find_partition_field(normalization.schema),
-                )
-            )
+    ndjson_path: Optional[str] = None
 
-    response_payload["adapter_results"] = adapter_results or None
+    if not dry_run and config.enable_json_adapter:
+        json_outputs = json_adapter.export_json(
+            _payload_to_dict(response_payload),
+            settings=config,
+            client_id=client_id,
+            filename=filename,
+            field_map=bq_field_map,
+        )
+        if json_outputs:
+            adapter_results.extend(json_outputs)
+            for result in json_outputs:
+                adapter_notes.extend(result.notes)
+                for artifact in result.artifacts:
+                    if artifact.name == "ndjson":
+                        ndjson_path = artifact.path
+
+    if not dry_run and effective_adapter == "sheets":
+        sheets_result = sheets_adapter.export_to_sheets(
+            normalization.dataframe,
+            settings=config,
+            worksheet_name=effective_sheet_name,
+            client_id=client_id,
+            primary_key=(rules or {}).get("primary_key") if rules else None,
+            mode=(rules or {}).get("sheets_mode") if rules else None,
+        )
+        if sheets_result:
+            adapter_results.append(sheets_result)
+            adapter_notes.extend(sheets_result.notes)
+    elif not dry_run and effective_adapter == "bigquery":
+        use_ndjson_flag = options.get("use_ndjson_file")
+        if isinstance(use_ndjson_flag, str):
+            parsed = _parse_bool_param(use_ndjson_flag)
+            use_ndjson_flag = parsed if parsed is not None else False
+        load_mode_option = str(options.get("load_mode") or "").lower()
+        if load_mode_option not in {"file", "stream"}:
+            load_mode_option = "stream"
+        use_file_mode = bool(use_ndjson_flag) or load_mode_option == "file"
+        ndjson_file = Path(ndjson_path) if use_file_mode and ndjson_path else None
+        if ndjson_file and not ndjson_file.exists():
+            ndjson_file = None
+        partition_candidate = _find_partition_field(normalization.schema)
+        sanitized_partition = (
+            bq_field_map.get(partition_candidate, sanitize_field_name(partition_candidate))
+            if partition_candidate
+            else None
+        )
+        bq_result = bigquery_adapter.export_to_bigquery(
+            normalization.dataframe,
+            settings=config,
+            dataset=(rules or {}).get("bigquery_dataset") if rules else None,
+            table=(rules or {}).get("bigquery_table") if rules else None,
+            partition_field=sanitized_partition,
+            mode="file" if use_file_mode else "stream",
+            file_path=ndjson_file,
+            schema_columns=table_schema.columns,
+            field_map=bq_field_map,
+        )
+        adapter_results.append(bq_result)
+        adapter_notes.extend(bq_result.notes)
+
+    notes.extend(adapter_notes)
+    notes = list(dict.fromkeys(notes))
+
+    response_payload["notes"] = notes
+    response_payload["adapter_results"] = (
+        [result.model_dump(mode="json") for result in adapter_results] if adapter_results else None
+    )
 
     duration_ms = round((time.perf_counter() - started) * 1000, 2)
     row_count = int(normalization.dataframe.shape[0])
@@ -911,9 +961,14 @@ async def _process_async_intake(
             config=config,
             options=options,
         )
-        artifacts.update({
-            "adapter_results": json.dumps(result.adapter_results, ensure_ascii=False),
-        })
+        artifacts.update(
+            {
+                "adapter_results": json.dumps(
+                    [item.model_dump(mode="json") for item in result.adapter_results],
+                    ensure_ascii=False,
+                ),
+            }
+        )
         receipt = WebhookReceipt(
             intake_id=intake_id,
             client_id=client_id,

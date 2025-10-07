@@ -25,7 +25,27 @@ export interface ParseResponse {
   data: Array<Record<string, unknown>>;
   notes: string[];
   pii_detected: PIIMetadata;
-  adapter_results?: Array<Record<string, unknown>> | null;
+  adapter_results?: AdapterResult[] | null;
+}
+
+export interface ArtifactDescriptor {
+  name: string;
+  path: string;
+  size_bytes?: number | null;
+  content_type?: string | null;
+  meta?: Record<string, unknown>;
+}
+
+export interface AdapterResult {
+  adapter: string;
+  status: "ok" | "skipped" | "error";
+  mode?: "stream" | "file";
+  table?: string | null;
+  job_id?: string | null;
+  reason?: string | null;
+  notes?: string[];
+  artifacts?: ArtifactDescriptor[];
+  details?: Record<string, unknown>;
 }
 
 export interface WebhookReceipt {

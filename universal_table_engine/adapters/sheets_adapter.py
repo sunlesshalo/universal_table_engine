@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import pandas as pd
 
@@ -11,6 +11,7 @@ except ImportError:  # pragma: no cover - optional dependency
     gspread = None
     Credentials = None
 
+from ..models import AdapterResult
 from ..settings import AppSettings
 
 SCOPES = [
@@ -27,13 +28,13 @@ def export_to_sheets(
     client_id: Optional[str],
     primary_key: Optional[str] = None,
     mode: Optional[str] = None,
-) -> Dict[str, Any]:
+) -> AdapterResult:
     if not settings.enable_sheets_adapter:
-        return {"adapter": "sheets", "status": "skipped", "reason": "disabled"}
+        return AdapterResult(adapter="sheets", status="skipped", reason="disabled")
     if gspread is None or Credentials is None:
-        return {"adapter": "sheets", "status": "skipped", "reason": "dependencies_missing"}
+        return AdapterResult(adapter="sheets", status="skipped", reason="dependencies_missing")
     if not settings.sheets_spreadsheet_id or not settings.sheets_service_account_file:
-        return {"adapter": "sheets", "status": "skipped", "reason": "missing_credentials"}
+        return AdapterResult(adapter="sheets", status="skipped", reason="missing_credentials")
 
     credentials = Credentials.from_service_account_file(str(settings.sheets_service_account_file), scopes=SCOPES)
     client = gspread.authorize(credentials)
@@ -66,7 +67,11 @@ def export_to_sheets(
             columns = df.columns.tolist()
             rows = [[record.get(column, "") for column in columns] for record in payload]
             worksheet.append_rows(rows, value_input_option="USER_ENTERED")
-    return {"adapter": "sheets", "status": "ok", "worksheet": name}
+    return AdapterResult(
+        adapter="sheets",
+        status="ok",
+        details={"worksheet": name, "mode": write_mode},
+    )
 
 
 __all__ = ["export_to_sheets"]

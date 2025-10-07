@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal, Optional
+from typing import List, Literal, Optional
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -42,6 +42,9 @@ class AppSettings(BaseSettings):
     enable_json_adapter: bool = Field(default=True)
     enable_sheets_adapter: bool = Field(default=False)
     enable_bigquery_adapter: bool = Field(default=False)
+    json_exports: List[Literal["envelope", "ndjson"]] = Field(default_factory=lambda: ["envelope", "ndjson"])
+    json_ndjson_gzip: bool = Field(default=False)
+    json_ndjson_drop_nulls: bool = Field(default=False)
 
     # IO / limits
     output_dir: Path = Field(default=Path("out"))
@@ -70,6 +73,10 @@ class AppSettings(BaseSettings):
     bigquery_dataset: Optional[str] = Field(default=None)
     bigquery_table: Optional[str] = Field(default=None)
     bigquery_location: Optional[str] = Field(default=None)
+    bigquery_time_partition_field: Optional[str] = Field(default=None)
+    bigquery_cluster_fields: List[str] = Field(default_factory=list)
+    bigquery_string_fields: List[str] = Field(default_factory=list)
+    bigquery_dedup_key: Optional[str] = Field(default=None)
 
     # Misc
     mask_pii: bool = Field(default=False)

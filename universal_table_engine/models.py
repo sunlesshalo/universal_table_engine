@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 from pydantic.config import ConfigDict
@@ -36,7 +36,27 @@ class ParseResponse(BaseModel):
     data: List[Dict[str, object]]
     notes: List[str]
     pii_detected: PIIMetadata
-    adapter_results: Optional[List[Dict[str, object]]] = None
+    adapter_results: Optional[List["AdapterResult"]] = None
+
+
+class ArtifactDescriptor(BaseModel):
+    name: str
+    path: str
+    size_bytes: Optional[int] = None
+    content_type: Optional[str] = None
+    meta: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AdapterResult(BaseModel):
+    adapter: str
+    status: Literal["ok", "skipped", "error"]
+    mode: Optional[Literal["stream", "file"]] = None
+    table: Optional[str] = None
+    job_id: Optional[str] = None
+    reason: Optional[str] = None
+    notes: List[str] = Field(default_factory=list)
+    artifacts: List[ArtifactDescriptor] = Field(default_factory=list)
+    details: Dict[str, Any] = Field(default_factory=dict)
 
 
 class HealthResponse(BaseModel):
@@ -95,6 +115,8 @@ __all__ = [
     "SourceMetadata",
     "SchemaMetadata",
     "PIIMetadata",
+    "AdapterResult",
+    "ArtifactDescriptor",
     "HealthResponse",
     "RulesResponse",
     "ErrorResponse",
@@ -102,3 +124,6 @@ __all__ = [
     "DeliverySummary",
     "PresetPayload",
 ]
+
+
+ParseResponse.model_rebuild()
